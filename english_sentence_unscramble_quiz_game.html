@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>English Sentence Unscramble Game</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti Library -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts for Kids -->
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Fredoka', sans-serif;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
+        @keyframes bounce-gentle {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        .animate-bounce-gentle {
+            animation: bounce-gentle 2s infinite ease-in-out;
+        }
+
+        @keyframes pop-in {
+            0% { transform: scale(0.85); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pop-in {
+            animation: pop-in 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+
+        .draggable-card {
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .draggable-card:active {
+            transform: scale(1.08);
+        }
+
+        .dragging {
+            opacity: 0.4;
+        }
+
+        .drop-zone-active {
+            border-color: #3B82F6 !important;
+            background-color: #EFF6FF !important;
+        }
+
+        ::-webkit-scrollbar {
+            height: 6px;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #FCD34D;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="bg-amber-50 min-h-screen flex flex-col justify-between items-center p-3 md:p-6 overflow-x-hidden text-slate-800">
+
+    <!-- Top Header & Scoreboard -->
+    <header class="w-full max-w-2xl flex justify-between items-center bg-white rounded-3xl p-3 shadow-md border-3 border-amber-200 gap-2 mb-2">
+        <div class="flex items-center gap-2">
+            <span class="text-3xl sm:text-4xl">🧩</span>
+            <div>
+                <h1 class="text-lg sm:text-xl font-black text-amber-600 tracking-wide">English Quiz Game</h1>
+                <p class="text-xs text-slate-400 font-bold hidden sm:block">Sentence Unscramble for Kids</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- Level Indicator -->
+            <div class="bg-blue-100 text-blue-700 font-bold px-3 py-1.5 rounded-2xl text-xs sm:text-sm border-2 border-blue-300">
+                Level <span id="current-level-num">1</span> / <span id="total-level-num">6</span>
+            </div>
+            <!-- Star Count -->
+            <div class="flex items-center gap-1 bg-amber-100 text-amber-700 font-bold px-3 py-1.5 rounded-2xl text-xs sm:text-sm border-2 border-amber-300">
+                <span class="text-base sm:text-lg">⭐</span>
+                <span id="star-count" class="text-base sm:text-lg font-black">0</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="w-full max-w-2xl bg-white rounded-3xl p-4 sm:p-6 shadow-xl border-4 border-amber-300 flex flex-col gap-4 relative flex-grow justify-around">
+
+        <!-- Progress Bar -->
+        <div class="w-full bg-slate-100 h-3 rounded-full overflow-hidden border border-slate-200">
+            <div id="progress-bar" class="bg-gradient-to-r from-amber-400 to-emerald-400 h-full w-0 transition-all duration-500 rounded-full"></div>
+        </div>
+
+        <!-- Speaker / Audio Prompt Bar -->
+        <div class="flex justify-between items-center bg-sky-50 rounded-2xl p-3 border-2 border-sky-200">
+            <div class="flex items-center gap-3">
+                <span id="topic-emoji" class="text-4xl sm:text-5xl animate-bounce-gentle">🎂</span>
+                <div>
+                    <span class="text-xs text-sky-500 font-bold uppercase tracking-wider block">Hint</span>
+                    <span id="topic-title" class="text-sm sm:text-base font-bold text-sky-900">Put the words in the right order:</span>
+                </div>
+            </div>
+            <button id="tts-btn" onclick="speakCurrentSentence()" class="bg-sky-500 hover:bg-sky-600 active:scale-95 text-white font-bold p-3 sm:px-4 sm:py-2.5 rounded-2xl shadow-md flex items-center gap-1.5 transition">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .891-1.077 1.337-1.707.707L5.586 15z" />
+                </svg>
+                <span class="text-xs sm:text-sm font-bold hidden sm:inline">Listen</span>
+            </button>
+        </div>
+
+        <!-- Answer Drop Zone Container -->
+        <div class="space-y-1.5">
+            <div class="flex justify-between items-center px-1">
+                <label class="text-xs sm:text-sm font-bold text-slate-500">
+                    Your Answer (Tap or drag words here) 👇
+                </label>
+                <button onclick="clearAnswerZone()" class="text-xs font-bold text-slate-400 hover:text-rose-500 transition underline">
+                    Reset
+                </button>
+            </div>
+            
+            <div id="answer-zone" class="min-h-[110px] sm:min-h-[130px] bg-slate-50 border-3 border-dashed border-slate-300 rounded-2xl p-3 flex flex-wrap gap-2.5 sm:gap-3.5 items-center justify-start transition-all duration-200 shadow-inner">
+                <!-- Word Cards in Answer Slot -->
+            </div>
+        </div>
+
+        <!-- Words Pool -->
+        <div class="space-y-1.5">
+            <label class="text-xs sm:text-sm font-bold text-slate-500 px-1">
+                Word Bank:
+            </label>
+            <div id="words-pool" class="min-h-[110px] sm:min-h-[130px] bg-amber-50/70 border-2 border-amber-200 rounded-2xl p-3 flex flex-wrap gap-2.5 sm:gap-3.5 items-center justify-center transition-all duration-200">
+                <!-- Word Cards in Pool -->
+            </div>
+        </div>
+
+        <!-- Action Control Buttons -->
+        <div class="flex gap-4 justify-center pt-1">
+            <button id="check-btn" onclick="checkAnswer()" class="w-full sm:w-auto bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-500 hover:to-teal-600 active:scale-95 text-white text-xl font-black py-3.5 px-10 rounded-2xl shadow-lg transition-all flex items-center justify-center gap-2">
+                <span>Check Answer</span>
+                <span class="text-xl">✨</span>
+            </button>
+        </div>
+    </main>
+
+    <footer class="mt-3 text-center text-xs text-slate-400 font-bold">
+        Designed for Kids • Touch & Mobile Friendly
+    </footer>
+
+    <!-- Result / Success Modal Popup -->
+    <div id="result-modal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden opacity-0 transition-opacity duration-300">
+        <div id="modal-card" class="bg-white rounded-3xl p-6 max-w-sm w-full text-center shadow-2xl border-4 border-amber-300 transform scale-95 transition-transform duration-300 flex flex-col items-center">
+            
+            <div id="modal-icon" class="text-6xl mb-2 animate-bounce">🎉</div>
+            <h2 id="modal-title" class="text-2xl font-black text-amber-500 mb-2">Great Job!</h2>
+            <p id="modal-sentence" class="text-lg font-bold text-slate-700 bg-amber-50 p-3 rounded-xl border border-amber-200 w-full mb-4">
+                I like to eat cake.
+            </p>
+
+            <div class="flex justify-center gap-2 mb-6">
+                <span class="text-3xl text-amber-400 animate-pulse">⭐</span>
+                <span class="text-3xl text-amber-400 animate-pulse">⭐</span>
+                <span class="text-3xl text-amber-400 animate-pulse">⭐</span>
+            </div>
+
+            <button id="next-btn" onclick="nextLevel()" class="w-full bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-500 hover:to-orange-600 text-white font-black text-lg py-3 rounded-2xl shadow-lg active:scale-95 transition flex items-center justify-center gap-2">
+                <span>Next Level</span>
+                <span class="text-xl">➡️</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Web Audio API Sound Generator -->
+    <script>
+        class SoundFX {
+            constructor() {
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+            }
+
+            playClick() {
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.08);
+                    gain.gain.setValueAtTime(0.15, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.08);
+                } catch (e) {}
+            }
+
+            playPop() {
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                    osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.1);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.1);
+                } catch (e) {}
+            }
+
+            playSuccess() {
+                this.init();
+                try {
+                    const notes = [523.25, 659.25, 783.99, 1046.50];
+                    notes.forEach((freq, idx) => {
+                        const osc = this.ctx.createOscillator();
+                        const gain = this.ctx.createGain();
+                        osc.type = 'sine';
+                        osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.1);
+                        gain.gain.setValueAtTime(0.2, this.ctx.currentTime + idx * 0.1);
+                        gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.1 + 0.3);
+                        osc.connect(gain);
+                        gain.connect(this.ctx.destination);
+                        osc.start(this.ctx.currentTime + idx * 0.1);
+                        osc.stop(this.ctx.currentTime + idx * 0.1 + 0.3);
+                    });
+                } catch (e) {}
+            }
+
+            playError() {
+                this.init();
+                try {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                    osc.frequency.setValueAtTime(140, this.ctx.currentTime + 0.15);
+                    gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start();
+                    osc.stop(this.ctx.currentTime + 0.3);
+                } catch (e) {}
+            }
+        }
+
+        const soundFX = new SoundFX();
+    </script>
+
+    <!-- English Quiz Logic -->
+    <script>
+        // English Quiz Data (Simpler Level for Young Kids)
+        const quizData = [
+            {
+                words: ["I", "like", "to", "eat", "cake."],
+                topic: "I like to eat cake.",
+                emoji: "🎂"
+            },
+            {
+                words: ["The", "cat", "is", "on", "the", "mat."],
+                topic: "The cat is on the mat.",
+                emoji: "🐱"
+            },
+            {
+                words: ["Red", "apples", "are", "sweet."],
+                topic: "Red apples are sweet.",
+                emoji: "🍎"
+            },
+            {
+                words: ["I", "go", "to", "school", "by", "bus."],
+                topic: "I go to school by bus.",
+                emoji: "🚌"
+            },
+            {
+                words: ["Look", "at", "the", "big", "sun."],
+                topic: "Look at the big sun.",
+                emoji: "☀️"
+            },
+            {
+                words: ["She", "has", "a", "cute", "dog."],
+                topic: "She has a cute dog.",
+                emoji: "🐶"
+            }
+        ];
+
+        // Card Styling Colors
+        const cardColors = [
+            "bg-rose-500 text-white border-rose-600 shadow-rose-200",
+            "bg-sky-500 text-white border-sky-600 shadow-sky-200",
+            "bg-emerald-500 text-white border-emerald-600 shadow-emerald-200",
+            "bg-amber-500 text-white border-amber-600 shadow-amber-200",
+            "bg-purple-500 text-white border-purple-600 shadow-purple-200",
+            "bg-indigo-500 text-white border-indigo-600 shadow-indigo-200"
+        ];
+
+        // State Variables
+        let currentLevel = 0;
+        let stars = 0;
+        let draggedElement = null;
+
+        // DOM References
+        const answerZoneEl = document.getElementById('answer-zone');
+        const wordsPoolEl = document.getElementById('words-pool');
+        const currentLevelNumEl = document.getElementById('current-level-num');
+        const totalLevelNumEl = document.getElementById('total-level-num');
+        const starCountEl = document.getElementById('star-count');
+        const progressBarEl = document.getElementById('progress-bar');
+        const topicEmojiEl = document.getElementById('topic-emoji');
+
+        // Modal Elements
+        const resultModal = document.getElementById('result-modal');
+        const modalCard = document.getElementById('modal-card');
+        const modalSentence = document.getElementById('modal-sentence');
+
+        // Load Quiz Level
+        function loadLevel(levelIndex) {
+            currentLevel = levelIndex;
+            const data = quizData[currentLevel];
+
+            currentLevelNumEl.textContent = currentLevel + 1;
+            totalLevelNumEl.textContent = quizData.length;
+            topicEmojiEl.textContent = data.emoji;
+
+            const progressPercent = (currentLevel / quizData.length) * 100;
+            progressBarEl.style.width = `${progressPercent}%`;
+
+            answerZoneEl.innerHTML = '';
+            wordsPoolEl.innerHTML = '';
+
+            // Shuffle words ensuring it's not identical to answer initially
+            let shuffled = [...data.words];
+            do {
+                shuffled.sort(() => Math.random() - 0.5);
+            } while (shuffled.join(' ') === data.words.join(' ') && data.words.length > 2);
+
+            shuffled.forEach((word, index) => {
+                const colorClass = cardColors[index % cardColors.length];
+                const card = createWordCard(word, colorClass);
+                wordsPoolEl.appendChild(card);
+            });
+        }
+
+        // Create Word Card
+        function createWordCard(word, colorClass) {
+            const card = document.createElement('div');
+            card.className = `draggable-card ${colorClass} text-2xl sm:text-3xl font-black px-4 sm:px-6 py-3 sm:py-4 rounded-2xl border-b-4 shadow-md flex items-center justify-center pop-in select-none`;
+            card.textContent = word;
+            card.setAttribute('draggable', 'true');
+            card.dataset.word = word;
+
+            // Tap to move card
+            card.addEventListener('click', () => {
+                soundFX.playClick();
+                if (card.parentElement === wordsPoolEl) {
+                    answerZoneEl.appendChild(card);
+                } else {
+                    wordsPoolEl.appendChild(card);
+                }
+                speakText(word);
+            });
+
+            // HTML5 Drag & Drop
+            card.addEventListener('dragstart', (e) => {
+                draggedElement = card;
+                card.classList.add('dragging');
+                e.dataTransfer.setData('text/plain', word);
+            });
+
+            card.addEventListener('dragend', () => {
+                draggedElement = null;
+                card.classList.remove('dragging');
+            });
+
+            return card;
+        }
+
+        // Setup Drop Zones
+        function setupDropZones() {
+            [answerZoneEl, wordsPoolEl].forEach((zone) => {
+                zone.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    zone.classList.add('drop-zone-active');
+                });
+
+                zone.addEventListener('dragleave', () => {
+                    zone.classList.remove('drop-zone-active');
+                });
+
+                zone.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    zone.classList.remove('drop-zone-active');
+                    if (draggedElement) {
+                        soundFX.playPop();
+                        zone.appendChild(draggedElement);
+                    }
+                });
+            });
+        }
+
+        // Clear / Reset Answer Zone
+        function clearAnswerZone() {
+            soundFX.playClick();
+            const cards = Array.from(answerZoneEl.children);
+            cards.forEach(card => wordsPoolEl.appendChild(card));
+        }
+
+        // Check Answer Logic
+        function checkAnswer() {
+            const userWords = Array.from(answerZoneEl.children).map(card => card.dataset.word);
+            const targetWords = quizData[currentLevel].words;
+
+            if (userWords.length === 0) {
+                soundFX.playError();
+                shakeElement(answerZoneEl);
+                return;
+            }
+
+            const isCorrect = userWords.join(' ') === targetWords.join(' ');
+
+            if (isCorrect) {
+                soundFX.playSuccess();
+                stars += 1;
+                starCountEl.textContent = stars;
+
+                if (window.confetti) {
+                    confetti({
+                        particleCount: 80,
+                        spread: 70,
+                        origin: { y: 0.6 }
+                    });
+                }
+
+                showModal(quizData[currentLevel].topic);
+                speakText(quizData[currentLevel].topic);
+            } else {
+                soundFX.playError();
+                shakeElement(answerZoneEl);
+            }
+        }
+
+        // Shake animation on error
+        function shakeElement(el) {
+            el.classList.add('translate-x-2');
+            setTimeout(() => el.classList.remove('translate-x-2'), 80);
+            setTimeout(() => el.classList.add('-translate-x-2'), 160);
+            setTimeout(() => el.classList.remove('-translate-x-2'), 240);
+        }
+
+        // Text-to-Speech (English Pronunciation)
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.85;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        function speakCurrentSentence() {
+            soundFX.playClick();
+            speakText(quizData[currentLevel].topic);
+        }
+
+        // Modal Display
+        function showModal(sentence) {
+            modalSentence.textContent = sentence;
+            resultModal.classList.remove('hidden');
+            setTimeout(() => {
+                resultModal.classList.remove('opacity-0');
+                modalCard.classList.remove('scale-95');
+                modalCard.classList.add('scale-100');
+            }, 10);
+        }
+
+        function hideModal() {
+            resultModal.classList.add('opacity-0');
+            modalCard.classList.remove('scale-100');
+            modalCard.classList.add('scale-95');
+            setTimeout(() => {
+                resultModal.classList.add('hidden');
+            }, 300);
+        }
+
+        // Next Level
+        function nextLevel() {
+            hideModal();
+            if (currentLevel + 1 < quizData.length) {
+                loadLevel(currentLevel + 1);
+            } else {
+                currentLevel = 0;
+                progressBarEl.style.width = '100%';
+                setTimeout(() => {
+                    alert('🎉 Great job! You finished all English levels!');
+                    loadLevel(0);
+                }, 300);
+            }
+        }
+
+        // Initialize App on Window Load
+        window.onload = function() {
+            setupDropZones();
+            loadLevel(0);
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.getVoices();
+            }
+        };
+    </script>
+</body>
+</html>
